@@ -110,6 +110,34 @@ Do pierwszych testów przyjmujemy:
 - format: **8N1**,
 - adres urządzenia: do potwierdzenia w menu falownika przed pierwszym odczytem.
 
+### Wybrany interfejs Raspberry Pi ↔ RS485
+
+Jako interfejs sprzętowy przyjmujemy moduł znany i fizycznie zwalidowany wcześniej w projekcie WVC:
+
+```text
+DFRobot DFR0845
+Gravity: Active Isolated RS485 to UART Module
+```
+
+Powody wyboru:
+
+- **separacja galwaniczna** pomiędzy stroną UART a magistralą RS485,
+- bezpośrednia współpraca z UART Raspberry Pi / CM5,
+- brak zależności od USB i nazw `/dev/ttyUSBx`,
+- moduł został już zwalidowany w WVC na Raspberry Pi CM5,
+- możemy ponownie wykorzystać sprawdzony sposób konfiguracji UART, diagnostyki, timeoutów i obsługi RS485.
+
+Najważniejsza zwalidowana zasada podłączenia strony UART DFR0845:
+
+```text
+Raspberry Pi TX -> T DFR0845
+Raspberry Pi RX <- R DFR0845
+```
+
+Oznaczeń `T` i `R` **nie krzyżujemy**. W WVC wcześniejsze połączenie `TX -> R`, `RX <- T` było nieprawidłowe i blokowało transmisję RS485.
+
+Strona UART i strona RS485 są rozdzielone galwanicznie. Masa logiczna strony UART nie może być bez potrzeby zwierana z izolowaną masą po stronie magistrali RS485.
+
 ### Ważne
 
 Pełna mapa **rejestrów zapisywalnych** musi zostać potwierdzona dla dokładnej kombinacji:
@@ -131,11 +159,15 @@ Do czasu potwierdzenia oficjalnej mapy rejestrów nie wykonujemy żadnych zapis�
                               ▼
                      ┌─────────────────┐
                      │    PV_home EMS  │
-                     │ Raspberry Pi /  │
-                     │ lokalny serwer  │
+                     │  Raspberry Pi   │
                      └────────┬────────┘
-                              │
-                     izolowany USB-RS485
+                              │ UART 3,3 V
+                              ▼
+                     ┌─────────────────┐
+                     │ DFRobot DFR0845 │
+                     │ isolated RS485  │
+                     │     ↔ UART      │
+                     └────────┬────────┘
                               │
                      Modbus RTU / RS485
                               │
@@ -251,11 +283,12 @@ To jest kluczowa część projektu.
 3. Program EMS otrzyma **allowlistę** rejestrów, do których wolno pisać.
 4. Rejestry zabezpieczeń sieciowych mają być programowo zablokowane przed zapisem.
 5. W pierwszym etapie cały interfejs Modbus działa READ-ONLY.
-6. Komunikacja przez **galwanicznie izolowany adapter USB↔RS485**.
-7. Awaria EMS / brak komunikacji nie może pozbawiać falownika jego własnych zabezpieczeń.
-8. Należy przewidzieć ręczny powrót do fabrycznego / standardowego `Self-use`.
-9. Każda komenda sterująca ma mieć timestamp, wartość zadaną, odpowiedź falownika i wynik operacji.
-10. Przed pracą na złączu COM urządzenie należy obsługiwać zgodnie z procedurami bezpieczeństwa producenta.
+6. Komunikacja Raspberry Pi ↔ SOFAR jest realizowana przez **galwanicznie izolowany DFRobot DFR0845 RS485↔UART**.
+7. Nie zwieramy lokalnie masy logicznej UART z izolowaną masą strony RS485 modułu DFR0845.
+8. Awaria EMS / brak komunikacji nie może pozbawiać falownika jego własnych zabezpieczeń.
+9. Należy przewidzieć ręczny powrót do fabrycznego / standardowego `Self-use`.
+10. Każda komenda sterująca ma mieć timestamp, wartość zadaną, odpowiedź falownika i wynik operacji.
+11. Przed pracą na złączu COM urządzenie należy obsługiwać zgodnie z procedurami bezpieczeństwa producenta.
 
 ---
 
@@ -304,14 +337,15 @@ Docelowo `PV_home` powinien umożliwiać:
 
 1. Udokumentować fizyczne złącze COM na zdjęciach.
 2. Potwierdzić orientację i numerację pinów na konkretnym urządzeniu.
-3. Wybrać izolowany adapter USB↔RS485.
-4. Potwierdzić adres Modbus falownika.
-5. Uruchomić pierwszy test READ-ONLY.
-6. Zweryfikować podstawowe rejestry przez porównanie z wyświetlaczem / SOLARMAN.
-7. Zebrać minimum kilka dni telemetrii, w tym co najmniej jedno zdarzenie `ID01`.
-8. Porównać dobowe liczniki import/export z licznikiem PGE.
-9. Pozyskać / potwierdzić mapę rejestrów sterujących dla FW `V120005`, Protocol `1.36`.
-10. Dopiero potem rozpocząć testy Passive Mode.
+3. Przygotować **DFRobot DFR0845** jako wybrany izolowany interfejs RS485↔UART.
+4. Wybrać konkretny Raspberry Pi / port UART i zapisać jego fizyczny pinout.
+5. Potwierdzić adres Modbus falownika.
+6. Uruchomić pierwszy test READ-ONLY.
+7. Zweryfikować podstawowe rejestry przez porównanie z wyświetlaczem / SOLARMAN.
+8. Zebrać minimum kilka dni telemetrii, w tym co najmniej jedno zdarzenie `ID01`.
+9. Porównać dobowe liczniki import/export z licznikiem PGE.
+10. Pozyskać / potwierdzić mapę rejestrów sterujących dla FW `V120005`, Protocol `1.36`.
+11. Dopiero potem rozpocząć testy Passive Mode.
 
 ---
 
@@ -324,5 +358,7 @@ Przydatne źródła producenta:
 - SOFAR HYD 5–20KTL-3PH — instrukcja użytkownika i opis interfejsu COM,
 - SOFAR — dokumentacja Passive Mode / Modbus dla HYD 3PH,
 - archiwum firmware SOFAR dla HYD 5–20KTL-3PH.
+
+Źródłem praktycznych, już zwalidowanych założeń dla DFR0845 jest również repozytorium `autoklinika/workshop-ventilation-controller`, w szczególności dokumentacja walidacji CM5 + DFR0845 i pinout WVC.
 
 Nieoficjalne implementacje open-source mogą być wykorzystywane do porównania i testów, ale **nie są źródłem nadrzędnym dla rejestrów zapisywalnych**.
